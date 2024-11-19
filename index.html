@@ -311,31 +311,44 @@
 <h1 id="installation">Installation</h1>
 <div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>zotero-utils
 </code></pre></div>
+<h1 id="help">Help</h1>
+<p>Using the magic of <a href="https://typer.tiangolo.com">Typer</a>, you can get help messages for this package using 
+<div class="highlight"><pre><span></span><code>zotero-utils<span class="w"> </span>--help
+</code></pre></div>
+And for each command you can also see a help message.
+<div class="highlight"><pre><span></span><code>zotero-utils<span class="w"> </span>show-creators-per-item<span class="w"> </span>--help
+</code></pre></div></p>
 <h1 id="tools">Tools</h1>
 <h2 id="counts">Counts</h2>
 <p>Provides counts of several pieces of metadata:</p>
 <ol>
-<li>
-<p>Number of articles from each author. Optionally, you can specify the number of slices shown.
-<div class="highlight"><pre><span></span><code>zotero-utils<span class="w"> </span>show-items-per-creator<span class="w"> </span>--num-slices<span class="o">=</span><span class="m">20</span>
+<li>Number of articles from each author. Optionally, you can specify the number of bars shown.
+<div class="highlight"><pre><span></span><code>zotero-utils<span class="w"> </span>show-items-per-creator<span class="w"> </span>--num-groups<span class="o">=</span><span class="m">20</span>
 </code></pre></div>
-<img alt="Number of Articles from Top 20 Authors" src="show_items_per_creator.png" /></p>
-</li>
+<img alt="Number of Articles from Top 20 Authors" src="show_items_per_creator_bar.png" /></li>
+</ol>
+<p>You can also choose to visualize this info as a pie chart.
+<div class="highlight"><pre><span></span><code>zotero-utils<span class="w"> </span>show-items-per-creator<span class="w"> </span>--vis-type<span class="w"> </span>pie
+</code></pre></div></p>
+<ol>
 <li>
 <p>Number of different authors in the database (identified by first and last name)
 <div class="highlight"><pre><span></span><code>zotero-utils<span class="w"> </span>count-distinct-authors
 </code></pre></div></p>
 </li>
 <li>
-<p>Number of articles with 1-N authors. Optionally, you can specify the number of slices shown.
-<div class="highlight"><pre><span></span><code>zotero-utils<span class="w"> </span>show-creators-per-item<span class="w"> </span>--num-slices<span class="o">=</span><span class="m">20</span>
+<p>Number of articles with 1-N authors. Optionally, you can specify the number of bars shown.
+<div class="highlight"><pre><span></span><code>zotero-utils<span class="w"> </span>show-creators-per-item<span class="w"> </span>--num-groups<span class="o">=</span><span class="m">20</span>
 </code></pre></div>
-<img alt="Number of Authors Per Article" src="show_creators_per_item.png" /></p>
+<img alt="Number of Authors Per Article" src="show_creators_per_item_bar.png" /></p>
 </li>
 </ol>
+<p>You can also choose to visualize this info as a pie chart.
+<div class="highlight"><pre><span></span><code>zotero-utils<span class="w"> </span>show-creators-per-item<span class="w"> </span>--vis-type<span class="w"> </span>pie
+</code></pre></div></p>
 <h2 id="timelines">Timelines</h2>
-<p>Visualize when articles were published
-<div class="highlight"><pre><span></span><code>zotero-utils<span class="w"> </span>show-timeline-date-published<span class="w"> </span>--show-details<span class="o">=</span><span class="nb">false</span>
+<p>Visualize when articles were published. By default, details of each publication are shown. Optionally, they can be hidden.
+<div class="highlight"><pre><span></span><code>zotero-utils<span class="w"> </span>show-timeline-date-published<span class="w"> </span>--no-show-details
 </code></pre></div>
 <img alt="Article Publication Timeline" src="article_publication_timeline.png" /></p>
 <!-- ## Reference Graphs (Not Implemented)
