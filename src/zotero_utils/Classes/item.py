@@ -2,7 +2,10 @@ import datetime
 import sqlite3
 import re
 
+import requests
+
 from .creator import get_creator
+from ..constants import ZOTERO_ENDPOINTS_DICT
 
 ITEM_FIELDS = [
     "title",
@@ -134,3 +137,43 @@ def get_item(item_id: int, conn: sqlite3.Connection) -> Item:
     item_dict_clean["id"] = item_id
         
     return Item(**item_dict_clean)
+
+def get_items(source: str = 'user', incl_attachments: bool = False) -> list:
+    """Get all of the items from a particular subset of the Zotero database."""
+    zotero_base_url = f"http://127.0.0.1:23119/api/users/0"
+    if source == 'user':
+        zotero_endpoint = ZOTERO_ENDPOINTS_DICT['items']
+    elif source == 'group':
+        zotero_endpoint = ZOTERO_ENDPOINTS_DICT['group_items']
+    url = f"{zotero_base_url}{zotero_endpoint}"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  # Raise an error for HTTP issues
+        
+        # Parse the JSON response
+        items = response.json()        
+    except requests.RequestException as e:
+        print(f"Error fetching items: {e}")
+        return None
+    
+    if incl_attachments:
+        return items
+    return [item for item in items if item["data"]["itemType"] != "attachment"]
+    
+def get_openalex_work_id(item_dict: dict) -> str:
+    """Get the Open Alex Work ID from the item dictionary."""
+
+    if "data" in item_dict:
+        item_dict = item_dict["data"]
+
+    if "extra" not in item_dict:
+        item_dict['extra'] = "" # Add an empty extra field if it doesn't exist        
+    
+    extra = item_dict["extra"]
+
+    # Parse the extra field for the OpenAlex Work ID, which starts on its own line with the prefix "OpenAlex Work ID: "
+    pattern = r"^OpenAlex Work ID: (.+)$"
+    match = re.search(pattern, extra, re.MULTILINE)
+    if match:
+        return match.group(1)
+    return None
