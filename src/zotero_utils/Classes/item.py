@@ -152,8 +152,9 @@ def get_items(source: str = 'user', incl_attachments: bool = False) -> list:
         
         # Parse the JSON response
         items = response.json()        
-    except requests.RequestException as e:
+    except requests.RequestException as e:        
         print(f"Error fetching items: {e}")
+        print('Make sure that Zotero is open and the Zotero HTTP API connection is enabled.')
         return None
     
     if incl_attachments:
