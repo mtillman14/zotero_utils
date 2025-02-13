@@ -180,8 +180,8 @@ def show_dag(md_dir: str = typer.Option(default=os.path.join(os.path.expanduser(
     count = 0
     for open_alex_work_id, zotero_item in zotero_items_by_work_id.items():
         count += 1        
-        if count>=20:
-            break # TESTING ONLY
+        # if count>=20:
+        #     break # TESTING ONLY
         zotero_item_data = zotero_item.get('data', {})
         if open_alex_work_id in edges_dict:
             # Get the referenced works from the cache
@@ -210,7 +210,11 @@ def show_dag(md_dir: str = typer.Option(default=os.path.join(os.path.expanduser(
             # Query the OpenAlex API for the work.
             url = f'https://api.openalex.org/works/{work_id}'
             response = requests.get(url)
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except:
+                print(f"Error fetching OpenAlex item {work_id}: {response.status_code}")
+                continue
             openalex_items_by_work_id[work_id] = response.json()
             print(f'Fetched from OpenAlex API: referenced OpenAlex item ({count} of {len(zotero_items_by_work_id.keys())})')
 
