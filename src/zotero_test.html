@@ -23,13 +23,40 @@
       }
       .subtitle {
         color: #666;
-        margin: 0 0 15px 0;
+        margin: 0;
         font-size: 14px;
+      }
+      .top-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+      }
+      .mode-selector {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .mode-selector label {
+        font-size: 14px;
+        color: #666;
+      }
+      .mode-selector select {
+        padding: 8px 12px;
+        font-size: 14px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        background: #fff;
+        cursor: pointer;
+      }
+      .mode-selector select:focus {
+        outline: none;
+        border-color: #cc2936;
       }
       .container {
         display: flex;
         gap: 20px;
-        height: calc(100vh - 100px);
+        height: calc(100vh - 120px);
       }
 
       /* Left panel - item list */
@@ -98,6 +125,11 @@
         color: #888;
       }
       .item-refs {
+        font-size: 10px;
+        color: #cc2936;
+        margin-top: 3px;
+      }
+      .item-count {
         font-size: 10px;
         color: #cc2936;
         margin-top: 3px;
@@ -251,8 +283,19 @@
     </style>
   </head>
   <body>
-    <h1>Zotero Citation Network</h1>
-    <p class="subtitle">Select an item from your library to visualize its citations</p>
+    <div class="top-bar">
+      <div>
+        <h1>Zotero Network Visualizer</h1>
+        <p class="subtitle">Explore citation and co-authorship networks in your library</p>
+      </div>
+      <div class="mode-selector">
+        <label for="mode-select">Mode:</label>
+        <select id="mode-select" onchange="switchMode(this.value)">
+          <option value="citations">Citations</option>
+          <option value="coauthorship">Co-authorship</option>
+        </select>
+      </div>
+    </div>
 
     <div class="container">
       <!-- Left Panel: Item List -->
@@ -261,15 +304,15 @@
           <input
             type="text"
             id="search-input"
-            placeholder="Search by title or author..."
-            oninput="filterItems()"
+            placeholder="Search..."
+            oninput="filterList()"
           />
         </div>
         <div class="list-header" id="list-header">Loading library...</div>
         <ul class="item-list" id="item-list">
           <li class="loading">
             <div class="loading-spinner"></div>
-            Loading Zotero items...
+            Loading...
           </li>
         </ul>
       </div>
@@ -315,12 +358,88 @@
 
     <script>
       let cy = null;
+      let currentMode = 'citations';
+
+      // Citations mode data
       let allItems = [];
       let libraryWorkIds = new Set();
       let selectedItemId = null;
 
+      // Co-authorship mode data
+      let allAuthors = [];
+      let selectedAuthorId = null;
+
       // Initialize on page load
       document.addEventListener('DOMContentLoaded', loadLibrary);
+
+      function switchMode(mode) {
+        currentMode = mode;
+        selectedItemId = null;
+        selectedAuthorId = null;
+
+        // Clear the graph
+        if (cy) {
+          cy.destroy();
+          cy = null;
+        }
+
+        // Reset graph header and legend
+        document.getElementById('graph-header').style.display = 'none';
+        document.getElementById('graph-legend').style.display = 'none';
+
+        // Update search placeholder
+        const searchInput = document.getElementById('search-input');
+        searchInput.value = '';
+
+        if (mode === 'citations') {
+          searchInput.placeholder = 'Search by title or author...';
+          document.getElementById('list-header').textContent = `${allItems.length} items with DOIs`;
+          renderItemList(allItems);
+          updateLegendForCitations();
+        } else if (mode === 'coauthorship') {
+          searchInput.placeholder = 'Search by author name...';
+          if (allAuthors.length === 0) {
+            loadAuthors();
+          } else {
+            document.getElementById('list-header').textContent = `${allAuthors.length} authors`;
+            renderAuthorList(allAuthors);
+            updateLegendForCoauthorship();
+          }
+        }
+      }
+
+      function updateLegendForCitations() {
+        document.getElementById('graph-legend').innerHTML = `
+          <span class="legend-item">
+            <span class="legend-dot legend-central"></span>
+            Selected Item
+          </span>
+          <span class="legend-item">
+            <span class="legend-dot legend-library"></span>
+            In Library
+          </span>
+          <span class="legend-item">
+            <span class="legend-dot legend-external"></span>
+            External
+          </span>
+        `;
+      }
+
+      function updateLegendForCoauthorship() {
+        document.getElementById('graph-legend').innerHTML = `
+          <span class="legend-item">
+            <span class="legend-dot legend-central"></span>
+            Selected Author
+          </span>
+          <span class="legend-item">
+            <span class="legend-dot legend-library"></span>
+            Co-author
+          </span>
+          <span class="legend-item" style="font-size: 11px; color: #666;">
+            Edge width = number of shared papers
+          </span>
+        `;
+      }
 
       async function loadLibrary() {
         try {
@@ -368,6 +487,7 @@
 
           // Render the list
           renderItemList(allItems);
+          updateLegendForCitations();
 
         } catch (error) {
           console.error('Error loading library:', error);
@@ -394,7 +514,7 @@
             data-id="${item.id}"
             class="${item.refCount === 0 ? 'no-refs' : ''}"
           >
-            <div class="item-title">${escapeHtml(item.title || 'Untitled')}</div>
+            <div class="item-title">${sanitizeHtml(item.title || 'Untitled')}</div>
             <div class="item-meta">${escapeHtml(item.authors || 'No authors')}${item.year ? ` (${item.year})` : ''}</div>
             <div class="item-refs">${item.refCount} references in library</div>
           </li>
@@ -411,20 +531,313 @@
         });
       }
 
-      function filterItems() {
+      function filterList() {
         const query = document.getElementById('search-input').value.toLowerCase().trim();
 
-        if (!query) {
-          renderItemList(allItems);
+        if (currentMode === 'citations') {
+          if (!query) {
+            renderItemList(allItems);
+            return;
+          }
+          const filtered = allItems.filter(item =>
+            (item.title && item.title.toLowerCase().includes(query)) ||
+            (item.authors && item.authors.toLowerCase().includes(query))
+          );
+          renderItemList(filtered);
+        } else if (currentMode === 'coauthorship') {
+          if (!query) {
+            renderAuthorList(allAuthors);
+            return;
+          }
+          const filtered = allAuthors.filter(author =>
+            author.name && author.name.toLowerCase().includes(query)
+          );
+          renderAuthorList(filtered);
+        }
+      }
+
+      async function loadAuthors() {
+        const listEl = document.getElementById('item-list');
+        listEl.innerHTML = `
+          <li class="loading">
+            <div class="loading-spinner"></div>
+            Loading authors...
+          </li>
+        `;
+
+        try {
+          const response = await fetch("/api/get-authors", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP error ${response.status}`);
+          }
+
+          const data = await response.json();
+          allAuthors = data.authors;
+
+          // Sort by paper count (descending), then by name
+          allAuthors.sort((a, b) => {
+            if (b.paperCount !== a.paperCount) {
+              return b.paperCount - a.paperCount;
+            }
+            return a.name.localeCompare(b.name);
+          });
+
+          document.getElementById('list-header').textContent = `${allAuthors.length} authors`;
+          renderAuthorList(allAuthors);
+          updateLegendForCoauthorship();
+
+        } catch (error) {
+          console.error('Error loading authors:', error);
+          listEl.innerHTML = `
+            <div class="error">
+              <strong>Error loading authors:</strong><br/>
+              ${error.message}
+            </div>
+          `;
+        }
+      }
+
+      function renderAuthorList(authors) {
+        const listEl = document.getElementById('item-list');
+
+        if (authors.length === 0) {
+          listEl.innerHTML = '<li class="status-message">No matching authors</li>';
           return;
         }
 
-        const filtered = allItems.filter(item =>
-          (item.title && item.title.toLowerCase().includes(query)) ||
-          (item.authors && item.authors.toLowerCase().includes(query))
-        );
+        listEl.innerHTML = authors.map(author => `
+          <li data-id="${escapeHtml(author.id)}">
+            <div class="item-title">${escapeHtml(author.name)}</div>
+            <div class="item-count">${author.paperCount} paper${author.paperCount !== 1 ? 's' : ''} in library</div>
+          </li>
+        `).join('');
 
-        renderItemList(filtered);
+        // Add click handlers
+        listEl.querySelectorAll('li[data-id]').forEach(li => {
+          li.addEventListener('click', () => {
+            const authorId = li.dataset.id;
+            if (authorId) {
+              selectAuthor(authorId);
+            }
+          });
+        });
+      }
+
+      async function selectAuthor(authorId) {
+        console.log('Selecting author:', authorId);
+
+        // Update selection in list
+        document.querySelectorAll('.item-list li').forEach(li => {
+          li.classList.toggle('selected', li.dataset.id === authorId);
+        });
+
+        selectedAuthorId = authorId;
+        const author = allAuthors.find(a => a.id === authorId);
+
+        if (!author) {
+          console.error('Author not found:', authorId);
+          return;
+        }
+
+        // Update graph header
+        document.getElementById('graph-header').style.display = 'block';
+        document.getElementById('graph-title').innerHTML = escapeHtml(author.name);
+        document.getElementById('graph-subtitle').textContent =
+          `${author.paperCount} paper${author.paperCount !== 1 ? 's' : ''} in library`;
+
+        document.getElementById('graph-legend').style.display = 'flex';
+
+        // Fetch co-authorship data
+        try {
+          console.log('Fetching co-authors for:', authorId);
+          const response = await fetch("/api/get-coauthors", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ author_id: authorId }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP error ${response.status}`);
+          }
+
+          const coauthorData = await response.json();
+          console.log('Got coauthor data:', coauthorData.nodes.length, 'coauthors');
+          renderCoauthorGraph(author, coauthorData);
+
+        } catch (error) {
+          console.error('Error fetching coauthors:', error);
+          renderCoauthorGraph(author, { nodes: [], edges: [] });
+        }
+      }
+
+      function renderCoauthorGraph(centralAuthor, coauthorData) {
+        console.log('renderCoauthorGraph called for:', centralAuthor.name);
+
+        const elements = [];
+        const nodeIds = new Set();
+
+        // Add central node
+        elements.push({
+          data: {
+            id: centralAuthor.id,
+            label: centralAuthor.name,
+            fullName: centralAuthor.name,
+            paperCount: centralAuthor.paperCount,
+            nodeType: 'central'
+          }
+        });
+        nodeIds.add(centralAuthor.id);
+
+        // Add coauthor nodes
+        coauthorData.nodes.forEach(node => {
+          if (!nodeIds.has(node.id)) {
+            elements.push({
+              data: {
+                id: node.id,
+                label: truncate(node.name, 20),
+                fullName: node.name,
+                paperCount: node.paperCount,
+                sharedPapers: node.sharedPapers,
+                nodeType: 'coauthor'
+              }
+            });
+            nodeIds.add(node.id);
+          }
+        });
+
+        // Add edges (undirected, with weight)
+        coauthorData.edges.forEach((edge, i) => {
+          if (nodeIds.has(edge.source) && nodeIds.has(edge.target)) {
+            elements.push({
+              data: {
+                id: `edge-${i}`,
+                source: edge.source,
+                target: edge.target,
+                weight: edge.weight
+              }
+            });
+          }
+        });
+
+        console.log('Calling initCoauthorCytoscape with', elements.length, 'elements');
+        initCoauthorCytoscape(elements);
+      }
+
+      function initCoauthorCytoscape(elements) {
+        console.log('initCoauthorCytoscape called');
+
+        try {
+          const cyContainer = document.getElementById("cy");
+
+          if (cy) {
+            cy.destroy();
+            cy = null;
+          }
+
+          // Find max weight for scaling edge widths
+          const maxWeight = Math.max(1, ...elements
+            .filter(e => e.data.weight)
+            .map(e => e.data.weight));
+
+          cy = cytoscape({
+            container: cyContainer,
+            elements: elements,
+            style: [
+              // Central author node
+              {
+                selector: 'node[nodeType = "central"]',
+                style: {
+                  "background-color": "#cc2936",
+                  "border-width": "3px",
+                  "border-color": "#333",
+                  label: "data(label)",
+                  "text-wrap": "wrap",
+                  "text-max-width": "120px",
+                  "font-size": "11px",
+                  "font-weight": "bold",
+                  "text-valign": "bottom",
+                  "text-margin-y": "8px",
+                  width: "50px",
+                  height: "50px",
+                },
+              },
+              // Coauthor nodes
+              {
+                selector: 'node[nodeType = "coauthor"]',
+                style: {
+                  "background-color": "#cc2936",
+                  label: "data(label)",
+                  "text-wrap": "wrap",
+                  "text-max-width": "100px",
+                  "font-size": "9px",
+                  "text-valign": "bottom",
+                  "text-margin-y": "5px",
+                  width: "35px",
+                  height: "35px",
+                },
+              },
+              // Edges (undirected, width based on weight)
+              {
+                selector: "edge",
+                style: {
+                  width: function(ele) {
+                    const weight = ele.data('weight') || 1;
+                    // Scale width from 1 to 8 based on weight
+                    return 1 + (weight / maxWeight) * 7;
+                  },
+                  "line-color": "#999",
+                  "curve-style": "bezier",
+                },
+              },
+            ],
+            layout: {
+              name: "concentric",
+              concentric: function(node) {
+                return node.data('nodeType') === 'central' ? 2 : 1;
+              },
+              levelWidth: function() { return 1; },
+              minNodeSpacing: 50,
+              padding: 30,
+              animate: false,
+            },
+          });
+
+          // Click handler for nodes
+          cy.on("tap", "node", function (evt) {
+            const node = evt.target;
+            const data = node.data();
+            showAuthorNodeInfo(data);
+          });
+
+          // Click on background to clear
+          cy.on("tap", function (evt) {
+            if (evt.target === cy) {
+              hideNodeInfo();
+            }
+          });
+
+          console.log('Coauthor Cytoscape initialized successfully');
+        } catch (error) {
+          console.error('Error initializing Coauthor Cytoscape:', error);
+        }
+      }
+
+      function showAuthorNodeInfo(data) {
+        const infoDiv = document.getElementById("node-info");
+        document.getElementById("node-title").innerHTML = escapeHtml(data.fullName || data.label || "Unknown");
+        document.getElementById("node-authors").textContent = `${data.paperCount || 0} papers in library`;
+        document.getElementById("node-year").textContent = data.sharedPapers
+          ? `${data.sharedPapers} shared paper${data.sharedPapers !== 1 ? 's' : ''}`
+          : '';
+
+        let typeText = data.nodeType === 'central' ? "Selected Author" : "Co-author";
+        document.getElementById("node-type").textContent = typeText;
+
+        infoDiv.style.display = "block";
       }
 
       async function selectItem(itemId) {
@@ -445,7 +858,7 @@
 
         // Update graph header
         document.getElementById('graph-header').style.display = 'block';
-        document.getElementById('graph-title').textContent = truncate(item.title, 60);
+        document.getElementById('graph-title').innerHTML = sanitizeHtml(truncate(item.title, 60));
         document.getElementById('graph-subtitle').textContent =
           `${item.authors || 'No authors'}${item.year ? ` (${item.year})` : ''}`;
 
@@ -492,7 +905,7 @@
         elements.push({
           data: {
             id: centralItem.id,
-            label: truncate(centralItem.title, 30),
+            label: truncate(stripHtml(centralItem.title), 30),
             fullTitle: centralItem.title,
             authors: centralItem.authors,
             year: centralItem.year,
@@ -524,7 +937,7 @@
             elements.push({
               data: {
                 id: node.id,
-                label: truncate(title, 25),
+                label: truncate(stripHtml(title), 25),
                 fullTitle: title,
                 authors: authors,
                 year: year,
@@ -685,7 +1098,7 @@
 
       function showNodeInfo(data) {
         const infoDiv = document.getElementById("node-info");
-        document.getElementById("node-title").textContent = data.fullTitle || data.label || "Unknown";
+        document.getElementById("node-title").innerHTML = sanitizeHtml(data.fullTitle || data.label || "Unknown");
         document.getElementById("node-authors").textContent = data.authors || "No authors";
         document.getElementById("node-year").textContent = data.year ? `Year: ${data.year}` : "";
 
@@ -714,6 +1127,22 @@
         const div = document.createElement('div');
         div.textContent = str;
         return div.innerHTML;
+      }
+
+      function sanitizeHtml(str) {
+        if (!str) return '';
+        // Allow only safe formatting tags: b, i, em, strong, sub, sup
+        // First escape everything, then unescape the safe tags
+        const escaped = escapeHtml(str);
+        // Restore safe tags
+        return escaped
+          .replace(/&lt;(\/?(b|i|em|strong|sub|sup))&gt;/gi, '<$1>');
+      }
+
+      function stripHtml(str) {
+        if (!str) return '';
+        // Remove HTML tags for plain text display (e.g., in graph labels)
+        return str.replace(/<[^>]*>/g, '');
       }
     </script>
   </body>

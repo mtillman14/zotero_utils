@@ -693,3 +693,125 @@ def get_item_citations(
         'nodes': nodes,
         'edges': edges,
     }
+
+
+def get_all_authors(conn: sqlite3.Connection) -> List[dict]:
+    """
+    Get all unique authors from the library with their paper counts.
+
+    Returns a list of author dicts with id, name, and paperCount.
+    Only includes authors from works that are in the Zotero library.
+    """
+    cursor = conn.cursor()
+
+    # Get all authors who have authored works in the library
+    # Join through works_authorships to get authors for library works
+    cursor.execute("""
+        SELECT
+            a.id,
+            a.display_name,
+            COUNT(DISTINCT wa.work_id) as paper_count
+        FROM authors a
+        JOIN works_authorships wa ON a.id = wa.author_id
+        JOIN zotero_openalex_mapping zom ON wa.work_id = zom.openalex_work_id
+        WHERE a.display_name IS NOT NULL AND a.display_name != ''
+        GROUP BY a.id, a.display_name
+        ORDER BY paper_count DESC, a.display_name
+    """)
+
+    authors = []
+    for row in cursor.fetchall():
+        authors.append({
+            'id': row[0],
+            'name': row[1],
+            'paperCount': row[2],
+        })
+
+    return authors
+
+
+def get_coauthors(conn: sqlite3.Connection, author_id: str) -> dict:
+    """
+    Get all co-authors for a specific author.
+
+    Args:
+        conn: SQLite database connection
+        author_id: The author ID to find co-authors for
+
+    Returns:
+        Dict with 'nodes' (co-author info) and 'edges' (with weight = shared paper count)
+    """
+    cursor = conn.cursor()
+
+    # Find all works by this author that are in the library
+    cursor.execute("""
+        SELECT DISTINCT wa.work_id
+        FROM works_authorships wa
+        JOIN zotero_openalex_mapping zom ON wa.work_id = zom.openalex_work_id
+        WHERE wa.author_id = ?
+    """, (author_id,))
+
+    author_works = set(row[0] for row in cursor.fetchall())
+
+    if not author_works:
+        return {'nodes': [], 'edges': []}
+
+    # Find all co-authors on those works
+    placeholders = ','.join('?' * len(author_works))
+    cursor.execute(f"""
+        SELECT
+            wa.author_id,
+            a.display_name,
+            COUNT(DISTINCT wa.work_id) as shared_papers
+        FROM works_authorships wa
+        JOIN authors a ON wa.author_id = a.id
+        WHERE wa.work_id IN ({placeholders})
+          AND wa.author_id != ?
+          AND a.display_name IS NOT NULL
+          AND a.display_name != ''
+        GROUP BY wa.author_id, a.display_name
+        ORDER BY shared_papers DESC
+    """, (*author_works, author_id))
+
+    coauthors = []
+    for row in cursor.fetchall():
+        coauthor_id = row[0]
+
+        # Get total paper count for this coauthor
+        cursor.execute("""
+            SELECT COUNT(DISTINCT wa.work_id)
+            FROM works_authorships wa
+            JOIN zotero_openalex_mapping zom ON wa.work_id = zom.openalex_work_id
+            WHERE wa.author_id = ?
+        """, (coauthor_id,))
+        total_papers = cursor.fetchone()[0]
+
+        coauthors.append({
+            'id': row[0],
+            'name': row[1],
+            'sharedPapers': row[2],
+            'paperCount': total_papers,
+        })
+
+    # Build nodes and edges
+    nodes = []
+    edges = []
+
+    for coauthor in coauthors:
+        nodes.append({
+            'id': coauthor['id'],
+            'name': coauthor['name'],
+            'paperCount': coauthor['paperCount'],
+            'sharedPapers': coauthor['sharedPapers'],
+        })
+
+        edges.append({
+            'source': author_id,
+            'target': coauthor['id'],
+            'weight': coauthor['sharedPapers'],
+        })
+
+    return {
+        'nodes': nodes,
+        'edges': edges,
+    }

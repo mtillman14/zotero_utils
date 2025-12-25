@@ -16,6 +16,8 @@ from zotero_utils.OpenAlexDB.citation_network import (
     get_external_connections,
     get_work_details,
     get_item_citations,
+    get_all_authors,
+    get_coauthors,
 )
 
 # Database configuration
@@ -305,6 +307,47 @@ class ZoteroProxyHandler(SimpleHTTPRequestHandler):
 
             except Exception as e:
                 print(f'Error getting citations: {e}')
+                traceback.print_exc()
+                self.send_error_response(str(e))
+
+        # Get all unique authors from the library
+        elif self.path == '/api/get-authors':
+            try:
+                print('\n=== Getting all authors ===')
+
+                conn = get_db_connection()
+                authors = get_all_authors(conn)
+
+                print(f'Found {len(authors)} unique authors')
+
+                self.send_json_response({'authors': authors})
+
+            except Exception as e:
+                print(f'Error getting authors: {e}')
+                traceback.print_exc()
+                self.send_error_response(str(e))
+
+        # Get co-authors for a specific author
+        elif self.path == '/api/get-coauthors':
+            try:
+                data = self.get_json_body()
+                author_id = data.get('author_id')
+
+                if not author_id:
+                    self.send_error_response('author_id required', 400)
+                    return
+
+                print(f'\n=== Getting coauthors for: {author_id} ===')
+
+                conn = get_db_connection()
+                coauthors = get_coauthors(conn, author_id)
+
+                print(f'Found {len(coauthors["nodes"])} coauthors')
+
+                self.send_json_response(coauthors)
+
+            except Exception as e:
+                print(f'Error getting coauthors: {e}')
                 traceback.print_exc()
                 self.send_error_response(str(e))
 
