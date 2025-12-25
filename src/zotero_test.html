@@ -3,322 +3,700 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Zotero Local API Test</title>
+    <title>Zotero Citation Network</title>
     <script src="https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
     <style>
+      * {
+        box-sizing: border-box;
+      }
       body {
         font-family: Arial, sans-serif;
-        max-width: 1000px;
-        margin: 50px auto;
+        margin: 0;
         padding: 20px;
+        height: 100vh;
+        overflow: hidden;
       }
       h1 {
         color: #333;
+        margin: 0 0 5px 0;
+        font-size: 24px;
       }
-      #results {
-        margin-top: 20px;
+      .subtitle {
+        color: #666;
+        margin: 0 0 15px 0;
+        font-size: 14px;
+      }
+      .container {
+        display: flex;
+        gap: 20px;
+        height: calc(100vh - 100px);
+      }
+
+      /* Left panel - item list */
+      .left-panel {
+        width: 350px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        background: #fff;
+      }
+      .search-box {
+        padding: 10px;
+        border-bottom: 1px solid #eee;
+      }
+      .search-box input {
+        width: 100%;
+        padding: 10px 12px;
+        font-size: 14px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+      }
+      .search-box input:focus {
+        outline: none;
+        border-color: #cc2936;
+      }
+      .list-header {
+        padding: 10px 15px;
+        background: #f5f5f5;
+        border-bottom: 1px solid #eee;
+        font-size: 12px;
+        color: #666;
+      }
+      .item-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0;
+        margin: 0;
+        list-style: none;
+      }
+      .item-list li {
+        padding: 12px 15px;
+        border-bottom: 1px solid #eee;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .item-list li:hover {
+        background: #f5f5f5;
+      }
+      .item-list li.selected {
+        background: #fff0f0;
+        border-left: 3px solid #cc2936;
+      }
+      .item-list li.no-refs {
+        opacity: 0.5;
+      }
+      .item-title {
+        font-size: 13px;
+        color: #333;
+        margin-bottom: 4px;
+        line-height: 1.3;
+      }
+      .item-meta {
+        font-size: 11px;
+        color: #888;
+      }
+      .item-refs {
+        font-size: 10px;
+        color: #cc2936;
+        margin-top: 3px;
+      }
+
+      /* Right panel - graph */
+      .right-panel {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        background: #fafafa;
+        overflow: hidden;
+      }
+      .graph-header {
+        padding: 15px;
+        background: #fff;
+        border-bottom: 1px solid #eee;
+      }
+      .graph-title {
+        font-size: 14px;
+        font-weight: bold;
+        color: #333;
+        margin-bottom: 5px;
+      }
+      .graph-subtitle {
+        font-size: 12px;
+        color: #666;
       }
       #cy {
+        flex: 1;
         width: 100%;
-        height: 500px;
-        border: 1px solid #ccc;
-        margin-top: 20px;
-        display: none;
       }
-      .item {
-        padding: 10px;
-        margin: 5px 0;
-        background-color: #f5f5f5;
-        border-left: 3px solid #cc2936;
+      .graph-legend {
+        padding: 10px 15px;
+        background: #fff;
+        border-top: 1px solid #eee;
+        display: flex;
+        gap: 20px;
+        font-size: 12px;
+      }
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .legend-dot {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+      }
+      .legend-central {
+        background-color: #cc2936;
+        border: 2px solid #333;
+      }
+      .legend-library {
+        background-color: #cc2936;
+      }
+      .legend-external {
+        background-color: #b0b0b0;
+      }
+
+      /* Loading and status messages */
+      .status-message {
+        padding: 15px;
+        text-align: center;
+        color: #666;
+      }
+      .loading {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: #666;
+      }
+      .loading-spinner {
+        width: 40px;
+        height: 40px;
+        border: 3px solid #eee;
+        border-top-color: #cc2936;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 15px;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
       }
       .error {
         color: #d32f2f;
-        padding: 10px;
+        padding: 20px;
         background-color: #ffebee;
-        border-left: 3px solid #d32f2f;
+        margin: 20px;
+        border-radius: 4px;
       }
-      .success {
-        color: #2e7d32;
-        padding: 10px;
-        background-color: #e8f5e9;
-        border-left: 3px solid #2e7d32;
+
+      /* Empty state */
+      .empty-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        color: #999;
+        text-align: center;
+        padding: 40px;
       }
-      button {
-        padding: 10px 20px;
-        background-color: #cc2936;
-        color: white;
-        border: none;
+      .empty-state svg {
+        width: 80px;
+        height: 80px;
+        margin-bottom: 20px;
+        opacity: 0.3;
+      }
+
+      /* Node info tooltip */
+      #node-info {
+        display: none;
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        width: 280px;
+        padding: 15px;
+        background: white;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+        z-index: 100;
+      }
+      #node-info h3 {
+        margin: 0 0 8px 0;
+        font-size: 13px;
+        line-height: 1.3;
+      }
+      #node-info p {
+        margin: 4px 0;
+        font-size: 11px;
+        color: #666;
+      }
+      #node-info .close-btn {
+        position: absolute;
+        top: 8px;
+        right: 12px;
         cursor: pointer;
-        font-size: 16px;
+        font-size: 18px;
+        color: #999;
       }
-      button:hover {
-        background-color: #a02028;
+      #node-info .close-btn:hover {
+        color: #333;
       }
     </style>
   </head>
   <body>
-    <h1>Zotero Local API Test</h1>
-    <button onclick="fetchRecentItems()">Fetch 10 Most Recent Items</button>
-    <div id="results"></div>
-    <div id="cy"></div>
+    <h1>Zotero Citation Network</h1>
+    <p class="subtitle">Select an item from your library to visualize its citations</p>
+
+    <div class="container">
+      <!-- Left Panel: Item List -->
+      <div class="left-panel">
+        <div class="search-box">
+          <input
+            type="text"
+            id="search-input"
+            placeholder="Search by title or author..."
+            oninput="filterItems()"
+          />
+        </div>
+        <div class="list-header" id="list-header">Loading library...</div>
+        <ul class="item-list" id="item-list">
+          <li class="loading">
+            <div class="loading-spinner"></div>
+            Loading Zotero items...
+          </li>
+        </ul>
+      </div>
+
+      <!-- Right Panel: Graph -->
+      <div class="right-panel">
+        <div class="graph-header" id="graph-header" style="display: none;">
+          <div class="graph-title" id="graph-title">Select an item</div>
+          <div class="graph-subtitle" id="graph-subtitle">Click an item in the list to view its citation network</div>
+        </div>
+        <div id="cy">
+          <div class="empty-state" id="empty-state">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+            </svg>
+            <div>Select an item from the list<br/>to view its citation network</div>
+          </div>
+        </div>
+        <div class="graph-legend" id="graph-legend" style="display: none;">
+          <span class="legend-item">
+            <span class="legend-dot legend-central"></span>
+            Selected Item
+          </span>
+          <span class="legend-item">
+            <span class="legend-dot legend-library"></span>
+            In Library
+          </span>
+          <span class="legend-item">
+            <span class="legend-dot legend-external"></span>
+            External
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div id="node-info">
+      <span class="close-btn" onclick="hideNodeInfo()">&times;</span>
+      <h3 id="node-title"></h3>
+      <p id="node-authors"></p>
+      <p id="node-year"></p>
+      <p id="node-type"></p>
+    </div>
 
     <script>
       let cy = null;
+      let allItems = [];
+      let libraryWorkIds = new Set();
+      let selectedItemId = null;
+
+      // Initialize on page load
+      document.addEventListener('DOMContentLoaded', loadLibrary);
+
+      async function loadLibrary() {
+        try {
+          const response = await fetch("/api/init-network", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `HTTP error ${response.status}`);
+          }
+
+          const networkData = await response.json();
+
+          // Store library work IDs for later reference
+          libraryWorkIds = new Set(networkData.library_ids);
+
+          // Store all items with their reference counts
+          allItems = networkData.nodes.map(node => ({
+            id: node.id,
+            title: node.title,
+            authors: node.authors,
+            year: node.year,
+            doi: node.doi,
+            zoteroKey: node.zotero_key,
+            refCount: 0  // Will be populated from edges
+          }));
+
+          // Count references for each item (outbound edges)
+          const refCounts = {};
+          networkData.edges.forEach(edge => {
+            refCounts[edge.source] = (refCounts[edge.source] || 0) + 1;
+          });
+          allItems.forEach(item => {
+            item.refCount = refCounts[item.id] || 0;
+          });
+
+          // Sort by title
+          allItems.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+
+          // Update header
+          document.getElementById('list-header').textContent =
+            `${allItems.length} items with DOIs`;
+
+          // Render the list
+          renderItemList(allItems);
+
+        } catch (error) {
+          console.error('Error loading library:', error);
+          document.getElementById('item-list').innerHTML = `
+            <div class="error">
+              <strong>Error loading library:</strong><br/>
+              ${error.message}<br/><br/>
+              Make sure the Python proxy server is running and Zotero is open.
+            </div>
+          `;
+        }
+      }
+
+      function renderItemList(items) {
+        const listEl = document.getElementById('item-list');
+
+        if (items.length === 0) {
+          listEl.innerHTML = '<li class="status-message">No matching items</li>';
+          return;
+        }
+
+        listEl.innerHTML = items.map(item => `
+          <li
+            data-id="${item.id}"
+            class="${item.refCount === 0 ? 'no-refs' : ''}"
+          >
+            <div class="item-title">${escapeHtml(item.title || 'Untitled')}</div>
+            <div class="item-meta">${escapeHtml(item.authors || 'No authors')}${item.year ? ` (${item.year})` : ''}</div>
+            <div class="item-refs">${item.refCount} references in library</div>
+          </li>
+        `).join('');
+
+        // Add click handlers via event delegation
+        listEl.querySelectorAll('li[data-id]').forEach(li => {
+          li.addEventListener('click', () => {
+            const itemId = li.dataset.id;
+            if (itemId) {
+              selectItem(itemId);
+            }
+          });
+        });
+      }
+
+      function filterItems() {
+        const query = document.getElementById('search-input').value.toLowerCase().trim();
+
+        if (!query) {
+          renderItemList(allItems);
+          return;
+        }
+
+        const filtered = allItems.filter(item =>
+          (item.title && item.title.toLowerCase().includes(query)) ||
+          (item.authors && item.authors.toLowerCase().includes(query))
+        );
+
+        renderItemList(filtered);
+      }
+
+      async function selectItem(itemId) {
+        console.log('Selecting item:', itemId);
+
+        // Update selection in list
+        document.querySelectorAll('.item-list li').forEach(li => {
+          li.classList.toggle('selected', li.dataset.id === itemId);
+        });
+
+        selectedItemId = itemId;
+        const item = allItems.find(i => i.id === itemId);
+
+        if (!item) {
+          console.error('Item not found:', itemId);
+          return;
+        }
+
+        // Update graph header
+        document.getElementById('graph-header').style.display = 'block';
+        document.getElementById('graph-title').textContent = truncate(item.title, 60);
+        document.getElementById('graph-subtitle').textContent =
+          `${item.authors || 'No authors'}${item.year ? ` (${item.year})` : ''}`;
+
+        // Show loading state
+        document.getElementById('empty-state').style.display = 'none';
+        document.getElementById('graph-legend').style.display = 'flex';
+
+        // Fetch citation data for this item
+        try {
+          console.log('Fetching citations for:', itemId);
+          const response = await fetch("/api/get-item-citations", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ work_id: itemId }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP error ${response.status}`);
+          }
+
+          const citationData = await response.json();
+          console.log('Got citation data:', citationData.nodes.length, 'nodes');
+          renderGraph(item, citationData);
+
+        } catch (error) {
+          console.error('Error fetching citations:', error);
+          // Still render the graph with just the central node if API fails
+          renderGraph(item, { nodes: [], edges: [] });
+        }
+      }
+
+      function renderGraph(centralItem, citationData) {
+        // Build elements array
+        const elements = [];
+        const nodeIds = new Set();
+
+        // Add central node
+        elements.push({
+          data: {
+            id: centralItem.id,
+            label: truncate(centralItem.title, 30),
+            fullTitle: centralItem.title,
+            authors: centralItem.authors,
+            year: centralItem.year,
+            nodeType: 'central',
+            isLibrary: true
+          }
+        });
+        nodeIds.add(centralItem.id);
+
+        // Add cited nodes from citation data
+        citationData.nodes.forEach(node => {
+          if (!nodeIds.has(node.id)) {
+            const isInLibrary = libraryWorkIds.has(node.id);
+
+            // For library items, get author data from allItems (Zotero data)
+            let authors = node.authors || '';
+            let title = node.title;
+            let year = node.year;
+
+            if (isInLibrary) {
+              const libraryItem = allItems.find(i => i.id === node.id);
+              if (libraryItem) {
+                authors = libraryItem.authors || authors;
+                title = libraryItem.title || title;
+                year = libraryItem.year || year;
+              }
+            }
+
+            elements.push({
+              data: {
+                id: node.id,
+                label: truncate(title, 25),
+                fullTitle: title,
+                authors: authors,
+                year: year,
+                nodeType: isInLibrary ? 'library' : 'external',
+                isLibrary: isInLibrary
+              }
+            });
+            nodeIds.add(node.id);
+          }
+        });
+
+        // Add edges
+        citationData.edges.forEach((edge, i) => {
+          if (nodeIds.has(edge.source) && nodeIds.has(edge.target)) {
+            elements.push({
+              data: {
+                id: `edge-${i}`,
+                source: edge.source,
+                target: edge.target
+              }
+            });
+          }
+        });
+
+        // Initialize or update Cytoscape
+        initCytoscape(elements);
+      }
 
       function initCytoscape(elements) {
         const cyContainer = document.getElementById("cy");
-        cyContainer.style.display = "block";
+
+        // Clear empty state
+        const emptyState = document.getElementById('empty-state');
+        if (emptyState) {
+          emptyState.style.display = 'none';
+        }
+
+        // Destroy existing instance
+        if (cy) {
+          cy.destroy();
+        }
 
         cy = cytoscape({
           container: cyContainer,
           elements: elements,
           style: [
+            // Central node (selected item) - large red with border
             {
-              selector: "node",
+              selector: 'node[nodeType = "central"]',
+              style: {
+                "background-color": "#cc2936",
+                "border-width": "3px",
+                "border-color": "#333",
+                label: "data(label)",
+                "text-wrap": "wrap",
+                "text-max-width": "120px",
+                "font-size": "11px",
+                "font-weight": "bold",
+                "text-valign": "bottom",
+                "text-margin-y": "8px",
+                width: "50px",
+                height: "50px",
+              },
+            },
+            // Library nodes (in Zotero) - red
+            {
+              selector: 'node[nodeType = "library"]',
               style: {
                 "background-color": "#cc2936",
                 label: "data(label)",
                 "text-wrap": "wrap",
-                "text-max-width": "150px",
-                "font-size": "10px",
+                "text-max-width": "100px",
+                "font-size": "9px",
                 "text-valign": "bottom",
                 "text-margin-y": "5px",
-                width: "40px",
-                height: "40px",
+                width: "35px",
+                height: "35px",
               },
             },
+            // External nodes (not in Zotero) - grey
+            {
+              selector: 'node[nodeType = "external"]',
+              style: {
+                "background-color": "#b0b0b0",
+                "border-width": "1px",
+                "border-color": "#888",
+                label: "data(label)",
+                "text-wrap": "wrap",
+                "text-max-width": "90px",
+                "font-size": "8px",
+                "text-valign": "bottom",
+                "text-margin-y": "3px",
+                width: "28px",
+                height: "28px",
+              },
+            },
+            // Highlighted node
             {
               selector: "node.highlighted",
               style: {
-                "background-color": "#a02028",
                 "border-width": "3px",
                 "border-color": "#333",
               },
             },
-            {
-              selector: "node.target-highlighted",
-              style: {
-                "background-color": "#ff6b6b",
-                "border-width": "3px",
-                "border-color": "#a02028",
-              },
-            },
-            {
-              selector: "node.dimmed",
-              style: {
-                "background-color": "#ccc",
-                opacity: 0.5,
-              },
-            },
+            // Edges
             {
               selector: "edge",
               style: {
-                width: 2,
-                "line-color": "#666",
-                "target-arrow-color": "#666",
+                width: 1.5,
+                "line-color": "#999",
+                "target-arrow-color": "#999",
                 "target-arrow-shape": "triangle",
                 "curve-style": "bezier",
-                "arrow-scale": 1.2,
-              },
-            },
-            {
-              selector: "edge.highlighted",
-              style: {
-                "line-color": "#cc2936",
-                "target-arrow-color": "#cc2936",
-                width: 3,
-              },
-            },
-            {
-              selector: "edge.dimmed",
-              style: {
-                "line-color": "#ddd",
-                "target-arrow-color": "#ddd",
-                opacity: 0.3,
+                "arrow-scale": 0.8,
               },
             },
           ],
           layout: {
-            name: "cose",
-            padding: 50,
-            nodeRepulsion: 8000,
-            idealEdgeLength: 100,
-            animate: true,
+            name: "concentric",
+            concentric: function(node) {
+              // Central node in the middle, others in outer ring
+              return node.data('nodeType') === 'central' ? 2 : 1;
+            },
+            levelWidth: function() { return 1; },
+            minNodeSpacing: 50,
+            padding: 30,
+            animate: false,
           },
         });
 
-        // Add click handler for nodes to highlight outbound edges and targets
+        // Click handler for nodes - just show info, don't navigate
         cy.on("tap", "node", function (evt) {
           const node = evt.target;
           const data = node.data();
 
-          // Clear previous highlighting
-          cy.elements().removeClass(
-            "highlighted target-highlighted dimmed"
-          );
-
-          // Get outbound edges (edges where this node is the source)
-          const outboundEdges = node.outgoers("edge");
-          const targetNodes = outboundEdges.targets();
-
-          // Dim all elements first
-          cy.elements().addClass("dimmed");
-
-          // Highlight the clicked node
-          node.removeClass("dimmed").addClass("highlighted");
-
-          // Highlight outbound edges
-          outboundEdges.removeClass("dimmed").addClass("highlighted");
-
-          // Highlight target nodes
-          targetNodes.removeClass("dimmed").addClass("target-highlighted");
-
-          console.log("Selected node:", data.fullTitle);
-          console.log("Outbound edges:", outboundEdges.length);
-          console.log(
-            "Target nodes:",
-            targetNodes.map((n) => n.data("label")).join(", ")
-          );
+          // Show node info
+          showNodeInfo(data);
         });
 
-        // Click on background to clear highlighting
+        // Click on background to clear
         cy.on("tap", function (evt) {
           if (evt.target === cy) {
-            cy.elements().removeClass(
-              "highlighted target-highlighted dimmed"
-            );
+            hideNodeInfo();
           }
         });
       }
 
-      async function fetchEdges(itemKeys) {
-        try {
-          const response = await fetch("/api/edges", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ item_keys: itemKeys }),
-          });
+      function showNodeInfo(data) {
+        const infoDiv = document.getElementById("node-info");
+        document.getElementById("node-title").textContent = data.fullTitle || data.label || "Unknown";
+        document.getElementById("node-authors").textContent = data.authors || "No authors";
+        document.getElementById("node-year").textContent = data.year ? `Year: ${data.year}` : "";
 
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-
-          const edges = await response.json();
-
-          // Convert from NetworkX format to Cytoscape format
-          // NetworkX: {source, target, data: {type: "cites"}}
-          // Cytoscape: {data: {id, source, target, ...}}
-          return edges.map((edge, index) => ({
-            data: {
-              id: `edge-${index}`,
-              source: edge.source,
-              target: edge.target,
-              edgeType: edge.data.type,
-            },
-          }));
-        } catch (error) {
-          console.error("Error fetching edges:", error);
-          return [];
+        let typeText = "External Reference";
+        if (data.nodeType === 'central') {
+          typeText = "Selected Item";
+        } else if (data.isLibrary) {
+          typeText = "In Zotero Library";
         }
+        document.getElementById("node-type").textContent = typeText;
+
+        infoDiv.style.display = "block";
       }
 
-      async function fetchRecentItems() {
-        const resultsDiv = document.getElementById("results");
-        resultsDiv.innerHTML = "<p>Loading...</p>";
+      function hideNodeInfo() {
+        document.getElementById("node-info").style.display = "none";
+      }
 
-        try {
-          // Use userID 0 for local Zotero API
-          const response = await fetch(
-            "/zotero-api/users/0/items?limit=10&sort=dateAdded&direction=desc"
-          );
+      function truncate(str, maxLen) {
+        if (!str) return "";
+        return str.length > maxLen ? str.substring(0, maxLen - 3) + "..." : str;
+      }
 
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-
-          const items = await response.json();
-
-          if (items.length === 0) {
-            resultsDiv.innerHTML = "<p>No items found in library.</p>";
-            return;
-          }
-
-          let html = `<div class="success">Successfully connected to Zotero! Found ${items.length} items.</div>`;
-          html += "<h2>10 Most Recently Added Items:</h2>";
-
-          // Build nodes for Cytoscape
-          const cytoscapeNodes = [];
-
-          items.forEach((item, index) => {
-            const title = item.data.title || item.data.itemType || "Untitled";
-            const itemType = item.data.itemType || "unknown";
-            const dateAdded = item.data.dateAdded
-              ? new Date(item.data.dateAdded).toLocaleDateString()
-              : "Unknown";
-
-            const creators = item.data.creators || [];
-            const authorStr =
-              creators.length > 0
-                ? creators
-                    .slice(0, 2)
-                    .map((c) => c.lastName || c.name)
-                    .join(", ") + (creators.length > 2 ? " et al." : "")
-                : "No authors";
-
-            html += `
-              <div class="item">
-                <strong>${index + 1}.</strong> ${title}
-                <br><small>${authorStr}</small>
-                <br><small>Type: ${itemType} | Added: ${dateAdded}</small>
-              </div>
-            `;
-
-            // Create node for Cytoscape
-            // Truncate title for display
-            const displayTitle =
-              title.length > 40 ? title.substring(0, 37) + "..." : title;
-
-            cytoscapeNodes.push({
-              data: {
-                id: item.key,
-                label: displayTitle,
-                fullTitle: title,
-                itemType: itemType,
-                authors: authorStr,
-              },
-            });
-          });
-
-          resultsDiv.innerHTML = html;
-
-          // Get item keys for edge fetching
-          const itemKeys = cytoscapeNodes.map((node) => node.data.id);
-
-          // Fetch edges from Python backend
-          const cytoscapeEdges = await fetchEdges(itemKeys);
-
-          // Combine nodes and edges
-          const elements = [...cytoscapeNodes, ...cytoscapeEdges];
-
-          // Initialize Cytoscape with nodes and edges
-          initCytoscape(elements);
-
-          // Log edge info
-          console.log(
-            `Rendered ${cytoscapeNodes.length} nodes and ${cytoscapeEdges.length} edges`
-          );
-        } catch (error) {
-          resultsDiv.innerHTML = `
-            <div class="error">
-              <strong>Error:</strong> ${error.message}
-              <br><br>
-              Make sure the Python proxy server is running!
-            </div>
-          `;
-          console.error("Full error:", error);
-        }
+      function escapeHtml(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
       }
     </script>
   </body>

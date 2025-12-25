@@ -326,6 +326,23 @@ CREATE TABLE works_related_works (
     related_work_id TEXT
 );
 
+-- Zotero to OpenAlex mapping table
+CREATE TABLE IF NOT EXISTS zotero_openalex_mapping (
+    zotero_key TEXT PRIMARY KEY,
+    openalex_work_id TEXT,
+    doi TEXT,
+    title TEXT,
+    last_updated TEXT
+);
+
+-- Cache "cited by" relationships (inverse of works_referenced_works)
+CREATE TABLE IF NOT EXISTS works_cited_by (
+    work_id TEXT,
+    citing_work_id TEXT,
+    fetched_date TEXT,
+    PRIMARY KEY (work_id, citing_work_id)
+);
+
 -- Indexes
 CREATE INDEX concepts_ancestors_concept_id_idx ON concepts_ancestors(concept_id);
 CREATE INDEX concepts_related_concepts_concept_id_idx ON concepts_related_concepts(concept_id);
@@ -333,3 +350,7 @@ CREATE INDEX concepts_related_concepts_related_concept_id_idx ON concepts_relate
 CREATE INDEX works_primary_locations_work_id_idx ON works_primary_locations(work_id);
 CREATE INDEX works_locations_work_id_idx ON works_locations(work_id);
 CREATE INDEX works_best_oa_locations_work_id_idx ON works_best_oa_locations(work_id);
+CREATE INDEX zotero_openalex_mapping_work_id_idx ON zotero_openalex_mapping(openalex_work_id);
+CREATE INDEX works_cited_by_work_id_idx ON works_cited_by(work_id);
+CREATE INDEX works_referenced_works_work_id_idx ON works_referenced_works(work_id);
+CREATE INDEX works_referenced_works_ref_id_idx ON works_referenced_works(referenced_work_id);
