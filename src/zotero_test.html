@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Zotero Local API Test</title>
+    <script src="https://unpkg.com/cytoscape@3.28.1/dist/cytoscape.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 1000px;
+        margin: 50px auto;
+        padding: 20px;
+      }
+      h1 {
+        color: #333;
+      }
+      #results {
+        margin-top: 20px;
+      }
+      #cy {
+        width: 100%;
+        height: 500px;
+        border: 1px solid #ccc;
+        margin-top: 20px;
+        display: none;
+      }
+      .item {
+        padding: 10px;
+        margin: 5px 0;
+        background-color: #f5f5f5;
+        border-left: 3px solid #cc2936;
+      }
+      .error {
+        color: #d32f2f;
+        padding: 10px;
+        background-color: #ffebee;
+        border-left: 3px solid #d32f2f;
+      }
+      .success {
+        color: #2e7d32;
+        padding: 10px;
+        background-color: #e8f5e9;
+        border-left: 3px solid #2e7d32;
+      }
+      button {
+        padding: 10px 20px;
+        background-color: #cc2936;
+        color: white;
+        border: none;
+        cursor: pointer;
+        font-size: 16px;
+      }
+      button:hover {
+        background-color: #a02028;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Zotero Local API Test</h1>
+    <button onclick="fetchRecentItems()">Fetch 10 Most Recent Items</button>
+    <div id="results"></div>
+    <div id="cy"></div>
+
+    <script>
+      let cy = null;
+
+      function initCytoscape(elements) {
+        const cyContainer = document.getElementById("cy");
+        cyContainer.style.display = "block";
+
+        cy = cytoscape({
+          container: cyContainer,
+          elements: elements,
+          style: [
+            {
+              selector: "node",
+              style: {
+                "background-color": "#cc2936",
+                label: "data(label)",
+                "text-wrap": "wrap",
+                "text-max-width": "150px",
+                "font-size": "10px",
+                "text-valign": "bottom",
+                "text-margin-y": "5px",
+                width: "40px",
+                height: "40px",
+              },
+            },
+            {
+              selector: "node.highlighted",
+              style: {
+                "background-color": "#a02028",
+                "border-width": "3px",
+                "border-color": "#333",
+              },
+            },
+            {
+              selector: "node.target-highlighted",
+              style: {
+                "background-color": "#ff6b6b",
+                "border-width": "3px",
+                "border-color": "#a02028",
+              },
+            },
+            {
+              selector: "node.dimmed",
+              style: {
+                "background-color": "#ccc",
+                opacity: 0.5,
+              },
+            },
+            {
+              selector: "edge",
+              style: {
+                width: 2,
+                "line-color": "#666",
+                "target-arrow-color": "#666",
+                "target-arrow-shape": "triangle",
+                "curve-style": "bezier",
+                "arrow-scale": 1.2,
+              },
+            },
+            {
+              selector: "edge.highlighted",
+              style: {
+                "line-color": "#cc2936",
+                "target-arrow-color": "#cc2936",
+                width: 3,
+              },
+            },
+            {
+              selector: "edge.dimmed",
+              style: {
+                "line-color": "#ddd",
+                "target-arrow-color": "#ddd",
+                opacity: 0.3,
+              },
+            },
+          ],
+          layout: {
+            name: "cose",
+            padding: 50,
+            nodeRepulsion: 8000,
+            idealEdgeLength: 100,
+            animate: true,
+          },
+        });
+
+        // Add click handler for nodes to highlight outbound edges and targets
+        cy.on("tap", "node", function (evt) {
+          const node = evt.target;
+          const data = node.data();
+
+          // Clear previous highlighting
+          cy.elements().removeClass(
+            "highlighted target-highlighted dimmed"
+          );
+
+          // Get outbound edges (edges where this node is the source)
+          const outboundEdges = node.outgoers("edge");
+          const targetNodes = outboundEdges.targets();
+
+          // Dim all elements first
+          cy.elements().addClass("dimmed");
+
+          // Highlight the clicked node
+          node.removeClass("dimmed").addClass("highlighted");
+
+          // Highlight outbound edges
+          outboundEdges.removeClass("dimmed").addClass("highlighted");
+
+          // Highlight target nodes
+          targetNodes.removeClass("dimmed").addClass("target-highlighted");
+
+          console.log("Selected node:", data.fullTitle);
+          console.log("Outbound edges:", outboundEdges.length);
+          console.log(
+            "Target nodes:",
+            targetNodes.map((n) => n.data("label")).join(", ")
+          );
+        });
+
+        // Click on background to clear highlighting
+        cy.on("tap", function (evt) {
+          if (evt.target === cy) {
+            cy.elements().removeClass(
+              "highlighted target-highlighted dimmed"
+            );
+          }
+        });
+      }
+
+      async function fetchEdges(itemKeys) {
+        try {
+          const response = await fetch("/api/edges", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ item_keys: itemKeys }),
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          const edges = await response.json();
+
+          // Convert from NetworkX format to Cytoscape format
+          // NetworkX: {source, target, data: {type: "cites"}}
+          // Cytoscape: {data: {id, source, target, ...}}
+          return edges.map((edge, index) => ({
+            data: {
+              id: `edge-${index}`,
+              source: edge.source,
+              target: edge.target,
+              edgeType: edge.data.type,
+            },
+          }));
+        } catch (error) {
+          console.error("Error fetching edges:", error);
+          return [];
+        }
+      }
+
+      async function fetchRecentItems() {
+        const resultsDiv = document.getElementById("results");
+        resultsDiv.innerHTML = "<p>Loading...</p>";
+
+        try {
+          // Use userID 0 for local Zotero API
+          const response = await fetch(
+            "/zotero-api/users/0/items?limit=10&sort=dateAdded&direction=desc"
+          );
+
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          const items = await response.json();
+
+          if (items.length === 0) {
+            resultsDiv.innerHTML = "<p>No items found in library.</p>";
+            return;
+          }
+
+          let html = `<div class="success">Successfully connected to Zotero! Found ${items.length} items.</div>`;
+          html += "<h2>10 Most Recently Added Items:</h2>";
+
+          // Build nodes for Cytoscape
+          const cytoscapeNodes = [];
+
+          items.forEach((item, index) => {
+            const title = item.data.title || item.data.itemType || "Untitled";
+            const itemType = item.data.itemType || "unknown";
+            const dateAdded = item.data.dateAdded
+              ? new Date(item.data.dateAdded).toLocaleDateString()
+              : "Unknown";
+
+            const creators = item.data.creators || [];
+            const authorStr =
+              creators.length > 0
+                ? creators
+                    .slice(0, 2)
+                    .map((c) => c.lastName || c.name)
+                    .join(", ") + (creators.length > 2 ? " et al." : "")
+                : "No authors";
+
+            html += `
+              <div class="item">
+                <strong>${index + 1}.</strong> ${title}
+                <br><small>${authorStr}</small>
+                <br><small>Type: ${itemType} | Added: ${dateAdded}</small>
+              </div>
+            `;
+
+            // Create node for Cytoscape
+            // Truncate title for display
+            const displayTitle =
+              title.length > 40 ? title.substring(0, 37) + "..." : title;
+
+            cytoscapeNodes.push({
+              data: {
+                id: item.key,
+                label: displayTitle,
+                fullTitle: title,
+                itemType: itemType,
+                authors: authorStr,
+              },
+            });
+          });
+
+          resultsDiv.innerHTML = html;
+
+          // Get item keys for edge fetching
+          const itemKeys = cytoscapeNodes.map((node) => node.data.id);
+
+          // Fetch edges from Python backend
+          const cytoscapeEdges = await fetchEdges(itemKeys);
+
+          // Combine nodes and edges
+          const elements = [...cytoscapeNodes, ...cytoscapeEdges];
+
+          // Initialize Cytoscape with nodes and edges
+          initCytoscape(elements);
+
+          // Log edge info
+          console.log(
+            `Rendered ${cytoscapeNodes.length} nodes and ${cytoscapeEdges.length} edges`
+          );
+        } catch (error) {
+          resultsDiv.innerHTML = `
+            <div class="error">
+              <strong>Error:</strong> ${error.message}
+              <br><br>
+              Make sure the Python proxy server is running!
+            </div>
+          `;
+          console.error("Full error:", error);
+        }
+      }
+    </script>
+  </body>
+</html>

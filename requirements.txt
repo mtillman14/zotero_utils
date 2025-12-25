@@ -1,0 +1,8 @@
+mkdocs
+pytest
+toml
+mkdocs-material
+mkdocs-git-revision-date-localized-plugin
+mkdocs-awesome-pages-plugin
+mkdocstrings
+pymupdf4llm

@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tree:*)",
+      "Bash(git -C /workspace log --oneline -20)",
+      "Bash(git -C /workspace log --all --graph --oneline)",
+      "Bash(cat:*)",
+      "Bash(sqlite3:*)",
+      "Bash(ls:*)",
+      "Bash(mount:*)",
+      "Bash(lsof:*)",
+      "Bash(python3:*)",
+      "Bash(find:*)",
+      "Bash(du:*)",
+      "Bash(wc:*)",
+      "Bash(dd:*)",
+      "Bash(xargs:*)",
+      "Bash(done)",
+      "WebFetch(domain:docs.openalex.org)",
+      "Bash(python -m pytest:*)",
+      "Bash(source .venv/bin/activate)",
+      "Bash(.venv/bin/python3 -m pytest:*)",
+      "Bash(/workspace-extra/OpenAlex_SQLite_Cache/.venv/bin/pytest tests/test_clean.py -v)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

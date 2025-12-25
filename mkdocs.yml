@@ -1,0 +1,42 @@
+
+site_name: "zotero_utils"
+site_author: "Mitchell Tillman"
+repo_name: ""
+repo_url: "https://github.com/mtillman14/zotero_utils"
+site_url: "https://mtillman14.github.io/zotero_utils/"
+theme:
+  name: material
+  features:
+    - navigation.path
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.expand
+    - toc.follow
+    - navigation.top
+    - content.code.copy
+
+plugins:
+  - search  
+  - awesome-pages
+  - mkdocstrings:
+      default_handler: python
+      handlers:
+        python:
+          rendering:
+            show_source: false
+            show_signature: true
+            show_docstrings: true
+          selection:
+            members: true
+            docstring_style: "google"
+          options:
+            filters:
+              - "!^__.*__$"
+              - "!^_"
+
+markdown_extensions:
+  - pymdownx.highlight:
+      use_pygments: true
+  - pymdownx.superfences
+  - admonition
+

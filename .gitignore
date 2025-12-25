@@ -1,0 +1,5 @@
+/.venv
+*.DS_Store
+/dist
+/site
+*.pyc
