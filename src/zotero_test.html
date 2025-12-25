@@ -450,7 +450,10 @@
           `${item.authors || 'No authors'}${item.year ? ` (${item.year})` : ''}`;
 
         // Show loading state
-        document.getElementById('empty-state').style.display = 'none';
+        const emptyState = document.getElementById('empty-state');
+        if (emptyState) {
+          emptyState.style.display = 'none';
+        }
         document.getElementById('graph-legend').style.display = 'flex';
 
         // Fetch citation data for this item
@@ -478,6 +481,9 @@
       }
 
       function renderGraph(centralItem, citationData) {
+        console.log('renderGraph called for:', centralItem.title);
+        console.log('Citation data:', citationData.nodes.length, 'nodes,', citationData.edges.length, 'edges');
+
         // Build elements array
         const elements = [];
         const nodeIds = new Set();
@@ -544,26 +550,32 @@
         });
 
         // Initialize or update Cytoscape
+        console.log('Calling initCytoscape with', elements.length, 'elements');
         initCytoscape(elements);
       }
 
       function initCytoscape(elements) {
-        const cyContainer = document.getElementById("cy");
+        console.log('initCytoscape called with', elements.length, 'elements');
 
-        // Clear empty state
-        const emptyState = document.getElementById('empty-state');
-        if (emptyState) {
-          emptyState.style.display = 'none';
-        }
+        try {
+          const cyContainer = document.getElementById("cy");
 
-        // Destroy existing instance
-        if (cy) {
-          cy.destroy();
-        }
+          // Clear empty state
+          const emptyState = document.getElementById('empty-state');
+          if (emptyState) {
+            emptyState.style.display = 'none';
+          }
 
-        cy = cytoscape({
-          container: cyContainer,
-          elements: elements,
+          // Destroy existing instance
+          if (cy) {
+            console.log('Destroying existing cy instance');
+            cy.destroy();
+            cy = null;
+          }
+
+          cy = cytoscape({
+            container: cyContainer,
+            elements: elements,
           style: [
             // Central node (selected item) - large red with border
             {
@@ -664,6 +676,11 @@
             hideNodeInfo();
           }
         });
+
+        console.log('Cytoscape initialized successfully');
+        } catch (error) {
+          console.error('Error initializing Cytoscape:', error);
+        }
       }
 
       function showNodeInfo(data) {
