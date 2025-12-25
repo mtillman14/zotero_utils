@@ -20,7 +20,9 @@
       "Bash(python -m pytest:*)",
       "Bash(source .venv/bin/activate)",
       "Bash(.venv/bin/python3 -m pytest:*)",
-      "Bash(/workspace-extra/OpenAlex_SQLite_Cache/.venv/bin/pytest tests/test_clean.py -v)"
+      "Bash(/workspace-extra/OpenAlex_SQLite_Cache/.venv/bin/pytest tests/test_clean.py -v)",
+      "Bash(pip install:*)",
+      "WebFetch(domain:api.openalex.org)"
     ],
     "deny": [],
     "ask": []

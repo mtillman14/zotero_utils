@@ -175,6 +175,15 @@ class Work:
             author = authorship.get('author') or {}
             author_id = author.get('id')
             if author_id:
+                # Insert basic author info into authors table
+                author_id_clean = remove_base_url(author_id)
+                author_display_name = author.get('display_name', '')
+                if author_display_name:
+                    conn.execute(
+                        "INSERT OR IGNORE INTO authors (id, display_name) VALUES (?, ?)",
+                        (author_id_clean, author_display_name)
+                    )
+
                 institutions = authorship.get('institutions') or []
                 if institutions:
                     for institution in institutions:
@@ -182,7 +191,7 @@ class Work:
                         insert_tuple = (
                             work_id,
                             authorship.get('author_position'),
-                            remove_base_url(author_id),
+                            author_id_clean,
                             remove_base_url(inst_id) if inst_id else None
                         )
                         conn.execute(
@@ -194,7 +203,7 @@ class Work:
                     insert_tuple = (
                         work_id,
                         authorship.get('author_position'),
-                        remove_base_url(author_id),
+                        author_id_clean,
                         None
                     )
                     conn.execute(

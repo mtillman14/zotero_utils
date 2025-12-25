@@ -594,6 +594,7 @@ def get_item_citations(
     cursor = conn.cursor()
     work_details = {}
     missing_ids = []
+    missing_authors_ids = []  # Works in cache but missing author data
 
     for ref_id in referenced:
         cursor.execute(
@@ -609,10 +610,13 @@ def get_item_citations(
                 'year': row[1],
                 'authors': authors,
             }
+            # If no authors found, we need to re-fetch to get author data
+            if not authors:
+                missing_authors_ids.append(ref_id)
         else:
             missing_ids.append(ref_id)
 
-    # Fetch missing work details from OpenAlex API
+    # Fetch works that are missing entirely
     if missing_ids:
         print(f"  Fetching details for {len(missing_ids)} external works...")
         fetched_works = get_works_by_ids(missing_ids)
@@ -642,6 +646,28 @@ def get_item_citations(
                     'year': None,
                     'authors': '',
                 }
+
+    # Fetch works that are cached but missing author data
+    if missing_authors_ids:
+        print(f"  Fetching author data for {len(missing_authors_ids)} cached works...")
+        fetched_works = get_works_by_ids(missing_authors_ids)
+
+        for work in fetched_works:
+            ext_id = remove_base_url(work.get('id', ''))
+            authors = extract_authors_from_work(work)
+
+            # Update work_details with the fetched authors
+            if ext_id in work_details:
+                work_details[ext_id]['authors'] = authors
+
+            # Update the cache with author data
+            try:
+                work_obj = Work(work)
+                work_obj.insert_or_replace_in_db(conn)
+            except Exception:
+                pass
+
+        conn.commit()
 
     # Build nodes for referenced works
     for ref_id in referenced:
